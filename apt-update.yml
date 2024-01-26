@@ -1,0 +1,46 @@
+- hosts: all
+  gather_facts: no
+  become: true
+  tasks:   
+   
+   # run apt update
+   - name: Running apt update
+     ansible.builtin.apt:
+       update_cache: yes
+
+   # run apt upgrade
+   - name: Running apt upgrade
+     ansible.builtin.apt:
+       name: "*"
+       state: latest
+
+   # run apt update distro
+   - name: Running apt dist-upgrade
+     ansible.builtin.apt:
+       upgrade: dist
+
+   # run apt autormove
+   - name: Running apt autoremove
+     ansible.builtin.apt:
+       autoremove: yes
+
+   - name: Installing application
+     ansible.builtin.apt:
+       pkg:
+         - apt-transport-https
+         - ca-certificates
+         - curl
+         - net-tools
+         - conntrack
+         - snmp
+         - python3-pexpect
+         - docker
+         - docker.io
+         - mlocate
+         - sshpass
+         - nmap
+         - tmux
+         - python3-pip
+       state: present
+       update_cache: yes
+       autoremove: yes

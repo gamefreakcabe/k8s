@@ -1,0 +1,54 @@
+Haproxy cluster build notes
+
+	edit haproxy configs to reflect the IP addresses and hostnames needed
+
+	run create_haproxy.yaml on proxies
+
+
+k8s cluster build notes:
+
+	deploy 6 servers with minimum 2 cores and 2G each (more like 12x24s for production)
+
+	ensure that the disk is expanded on each
+
+	ensure that the network is working on each with DNS
+
+	run create_k8s_with_docker_shim.yaml ansible-playbook on 3 masters and 3 workers
+
+	init the first master:
+		kubeadm init --pod-network-cidr=172.17.0.0/16 --control-plane-endpoint=10.254.252.48 --upload-certs --cri-socket unix:///var/run/cri-dockerd.sock
+		
+	record the token, hash, certificate key from the output of the init command and save to bootstrap future workers
+	
+	mkdir /home/mcabe/.kube
+		
+	cp /etc/kubernetes/admin.conf to /home/mcabe/.kube/config
+	
+	chown mcabe:mcabe /home/mcabe/.kube/config
+	
+	add calico cni plugin:
+		kubectl apply -f https://docs.projectcalico.org/manifests/calico.yaml
+
+	Join Master nodes:	
+		kubeadm join <haproxy vip>:<port> --token <token from init command> --discovery-token-ca-cert-hash sha256:<hash from init command> --control-plane --certificate-key <cert key from init command> --cri-socket unix:///var/run/cri-dockerd.sock
+
+	Join Worker nodes:
+		kubeadm join <endpoint>:<port> --token <token from join command> --discovery-token-ca-cert-hash sha256:<hash from join command> --cri-socket unix:///var/run/cri-dockerd.sock
+
+
+
+
+Command notes:
+
+	Rolling restart:
+		kubectl rollout restart deployments/joomla -n uab
+	Container image update:
+		kubectl set image deployments/joomla -n uab joomla=layer3communications/joomla:latest
+	Undo update:
+		kubectl rollout undo deployments/joomla -n uab
+	Set default namespace:
+		kubectl config set-context --current --namespace=uab
+	Reprint join command:
+		kubeadm token create --print-join-command
+	Regenerate Cert key:
+		sudo kubeadm init phase upload-certs --upload-certs

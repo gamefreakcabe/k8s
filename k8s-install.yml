@@ -1,0 +1,225 @@
+---
+- name: "Create a Kubernetes Master Cluster" 
+  hosts: "masters, workers"
+  remote_user: mcabe
+  become: yes
+  become_method: sudo
+  become_user: root
+  gather_facts: yes
+  connection: ssh
+  tasks:
+
+    - name: Apt Upgrade
+      apt:
+        update_cache: yes
+        upgrade: yes
+        autoremove: yes
+      become: true
+
+    - name: Configure sysctl.conf
+      lineinfile:
+        dest: /etc/sysctl.conf
+        regexp: "{{ item.regexp }}"
+        line: "{{ item.line }}"
+        state: present
+      with_items:
+        - { regexp: '^net.netfilter.nf_conntrack_max=1000000', line: 'net.netfilter.nf_conntrack_max=1000000' }
+        - { regexp: '^net.ipv6.conf.all.disable_ipv6=1', line: 'net.ipv6.conf.all.disable_ipv6=1' }
+        - { regexp: '^et.ipv6.conf.default.disable_ipv6=1', line: 'net.ipv6.conf.default.disable_ipv6=1' }
+      become: true
+
+    - name: Configure grub
+      lineinfile:
+        dest: /etc/default/grub
+        regexp: "{{ item.regexp }}"
+        line: "{{ item.line }}"
+        state: present
+      with_items:
+        - { regexp: '^GRUB_CMDLINE_LINUX_DEFAULT="ipv6.disable=1"', line: 'GRUB_CMDLINE_LINUX_DEFAULT="ipv6.disable=1"' }
+      become: true
+
+    - name: Reboot Masters
+      reboot:
+              reboot_timeout: 600
+      become: true
+
+    - name: Install initial packages
+      apt:
+        update_cache: yes
+        state: present
+        name:
+          - curl
+          - apt-transport-https
+          - net-tools
+          - git
+          - mlocate
+          - wget
+          - vim
+          - git
+          - gnupg2
+          - software-properties-common
+          - nfs-common
+          - ca-certificates
+      become: true
+
+
+      ### INSTALL DOCKER
+      
+
+    - name: Add docker apt key
+      shell: 'curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -'
+      become: true
+
+    - name: Add docker repo
+      shell: 'sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" -y'
+      become: true
+
+    - name: Install docker
+      apt:
+        update_cache: yes
+        state: present
+        name:
+          - docker-ce-cli
+          - docker-ce
+      become: true
+
+    - name: create docker dir
+      shell: 'mkdir -p /etc/systemd/system/docker.service.d'
+      become: true
+
+    - name: Copy docker daemon.json
+      copy:
+        src: ./daemon.json
+        dest: /etc/docker/daemon.json
+        owner: root
+        group: root
+        mode: 0644 
+      become: true
+
+    - name: Enable overlay module
+      shell: 'modprobe overlay'
+      become: true
+
+    - name: Enable br_netfilter module
+      shell: 'modprobe br_netfilter'
+      become: true
+
+    - name: Copy k8s config
+      copy:
+        src: ./k8s.conf
+        dest: /etc/modules-load.d/k8s.conf
+        owner: root
+        group: root
+        mode: 0644 
+      become: true
+
+    - name: Restart and enable docker
+      systemd:
+        daemon_reload: yes
+        state: restarted
+        name: docker
+        enabled: yes
+      become: true
+
+    - name: Get cri-dockerd
+      shell: 'wget https://github.com/Mirantis/cri-dockerd/releases/download/v0.3.0/cri-dockerd-0.3.0.amd64.tgz'
+      become: true
+
+    - name: unpack cri-dockerd
+      shell: 'tar xvf cri-dockerd-0.3.0.amd64.tgz'
+      become: true
+
+    - name: move cri-dockerd
+      shell: 'mv cri-dockerd/cri-dockerd /usr/local/bin/'
+      become: true
+
+    - name: chmod cri-dockerd
+      shell: 'chmod a+x /usr/local/bin/cri-dockerd'
+      become: true
+
+    - name: get systemd service cri-dockerd
+      shell: 'wget https://raw.githubusercontent.com/Mirantis/cri-dockerd/master/packaging/systemd/cri-docker.service'
+      become: true
+
+    - name: get socket for cri-dockerd
+      shell: 'wget https://raw.githubusercontent.com/Mirantis/cri-dockerd/master/packaging/systemd/cri-docker.socket'
+      become: true
+
+    - name: mv service files
+      shell: 'mv cri-docker.socket cri-docker.service /etc/systemd/system/'
+      become: true
+
+    - name: edit service file
+      shell: "sed -i -e 's,/usr/bin/cri-dockerd,/usr/local/bin/cri-dockerd,' /etc/systemd/system/cri-docker.service"
+      become: true
+
+    - name: Restart and enable docker
+      systemd:
+        daemon_reload: yes
+        state: restarted
+        name: cri-docker
+        enabled: yes
+      become: true
+
+    - name: enable cri socket
+      shell: 'systemctl enable --now cri-docker.socket'
+      become: true
+
+      ### K8s
+
+    - name: Add k8s apt key
+      shell: 'curl -fsSL  https://packages.cloud.google.com/apt/doc/apt-key.gpg|sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/k8s.gpg --yes'
+      become: true
+
+    - name: Add google apt key
+      shell: 'curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -'
+      become: true
+
+    - name: Add k8s apt source
+      shell: 'echo "deb https://apt.kubernetes.io/ kubernetes-xenial main" | sudo tee /etc/apt/sources.list.d/kubernetes.list'
+      become: true
+
+    - name: Install k8s and other dependencies
+      apt:
+        update_cache: yes
+        state: present
+        name:
+          - kubelet
+          - kubeadm
+          - kubectl
+      become: true
+
+    - name: Disable k8s updates
+      shell: 'apt-mark hold kubelet kubeadm kubectl'
+      become: true
+
+    - name: Disable swap mount on boot
+      lineinfile:
+        path: /etc/fstab
+        regexp: 'swap'
+        state: absent
+      become: true
+
+    - name: Disable swap
+      shell: 'swapoff -a'
+      become: true
+
+    - name: Copy k8s sysctl config
+      copy:
+        src: ./kubernetes.conf
+        dest: /etc/sysctl.d/kubernetes.conf
+        owner: root
+        group: root
+        mode: 0644 
+      become: true
+
+    - name: Enable kubelet
+      systemd:
+        state: started
+        name: kubelet
+        enabled: yes
+      become: true
+
+    - name: Pull and start master containers
+      shell: 'kubeadm config images pull --cri-socket /run/cri-dockerd.sock'
+      become: true
