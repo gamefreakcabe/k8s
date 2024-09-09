@@ -1,4 +1,6 @@
-- hosts: "masters, workers"
+---
+- name: "Create a Kubernetes Master Cluster" 
+  hosts: "masters, workers"
   remote_user: mcabe
   become: yes
   become_method: sudo
