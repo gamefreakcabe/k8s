@@ -40,9 +40,11 @@
          - conntrack
          - snmp
          - python3-pexpect
+         - docker
          - docker.io
          - sshpass
          - nmap
+         - mlocate
          - tmux
          - python3-pip
        state: present
