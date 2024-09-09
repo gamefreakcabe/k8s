@@ -40,7 +40,6 @@
          - conntrack
          - snmp
          - python3-pexpect
-         - docker
          - docker.io
          - mlocate
          - sshpass
