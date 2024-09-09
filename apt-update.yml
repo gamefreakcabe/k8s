@@ -1,12 +1,13 @@
 ---
-- name: "Create a Kubernetes Master Cluster" 
-  hosts: "masters, workers"
+- hosts: "masters, workers"
   remote_user: mcabe
   become: yes
   become_method: sudo
   become_user: root
   gather_facts: yes
   connection: ssh
+  
+  tasks:
    
    # run apt update
    - name: Running apt update
