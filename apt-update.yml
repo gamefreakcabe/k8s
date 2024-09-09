@@ -1,7 +1,10 @@
-- hosts: all
-  gather_facts: no
-  become: true
-  tasks:   
+- hosts: "masters, workers"
+  remote_user: mcabe
+  become: yes
+  become_method: sudo
+  become_user: root
+  gather_facts: yes
+  connection: ssh
    
    # run apt update
    - name: Running apt update
