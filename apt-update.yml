@@ -41,7 +41,6 @@
          - snmp
          - python3-pexpect
          - docker.io
-         - mlocate
          - sshpass
          - nmap
          - tmux
