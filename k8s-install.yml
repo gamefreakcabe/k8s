@@ -52,7 +52,6 @@
           - apt-transport-https
           - net-tools
           - git
-          - mlocate
           - wget
           - vim
           - git
